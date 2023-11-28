@@ -1,27 +1,39 @@
+
+scull-objs = scull_ops.o main.o
 obj-m += scull.o
 
 CTEST = ./test
 KERNELDIR = /lib/modules/$(shell uname -r)/build
+CC = gcc
 
 all:
 	make -C $(KERNELDIR) M=$(PWD) modules
-	gcc $(CTEST).c -o $(CTEST)
+	make test
 	make ins
+
+test:
+	$(CC) $(CTEST).c -o $(CTEST)
+
+clean_test:
+	rm -rf $(CTEST)
 
 clean:
 	make -C $(KERNELDIR) M=$(PWD) clean
-	rm -rf $(CTEST)
+	make clean_test
 	make rm
 
 ins:
 	sudo insmod scull.ko
-	LAST_NUM=$$(sudo dmesg --ctime | tail -1 | grep -Po '\d+$$'); \
-	PRE_LAST_NUM=$$(sudo dmesg --ctime | tail -1 | grep -Po '\d+(?=(\D+\d+$$))'); \
-	sudo mknod /dev/scull c $$PRE_LAST_NUM $$LAST_NUM; \
-	sudo chmod 777 /dev/scull
+	MAJOR_NUM=$$(sudo dmesg --ctime | tail -1 | grep -Po '\d+(?=(\D+\d+$$))'); \
+	sudo mknod /dev/scull1 c $$MAJOR_NUM 0; \
+	sudo mknod /dev/scull2 c $$MAJOR_NUM 1 
+	sudo chmod 777 /dev/scull1
+	sudo chmod 777 /dev/scull2
 	sudo dmesg --ctime | tail -1
+	ls -l /dev | grep scull
 
 rm:
 	sudo rmmod scull.ko
-	sudo rm -rf /dev/scull
+	sudo rm -rf /dev/scull1
+	sudo rm -rf /dev/scull2
 	sudo dmesg --ctime | tail -1

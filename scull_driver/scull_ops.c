@@ -1,46 +1,4 @@
-#include <linux/module.h> 	
-#include <linux/init.h> 	
-#include <linux/fs.h> 		
-#include <linux/cdev.h> 	
-#include <linux/slab.h> 	
-#include <asm/uaccess.h>
-
-MODULE_AUTHOR("Savenkov");
-MODULE_LICENSE("Dual BSD/GPL");
-
-int scull_major = 0;		
-int scull_minor = 0;		
-int scull_nr_devs = 1;		
-int scull_quantum = 4000;	
-int scull_qset = 1000;	
-
-struct scull_qset {
-	void **data;			
-	struct scull_qset *next; 	
-};
-
-struct scull_dev {
-	struct scull_qset *data;  
-	int quantum;		 
-	int qset;		  
-	unsigned long size;	  
-	unsigned int access_key;  
-	struct semaphore sem;    
-	struct cdev cdev;	 
-};
-
-struct scull_dev *scull_device;
-int scull_trim(struct scull_dev *dev);
-static void scull_setup_cdev(struct scull_dev *dev, int index);
-void scull_cleanup_module(void);
-static int scull_init_module(void);
-int scull_open(struct inode *inode, struct file *flip);
-int scull_release(struct inode *inode, struct file *flip);
-ssize_t scull_read(struct file *flip, char __user *buf, size_t count,
-			loff_t *f_pos);
-ssize_t scull_write(struct file *flip, const char __user *buf, size_t count,
-					loff_t *f_pos);
-struct scull_qset *scull_follow(struct scull_dev *dev, int n);
+#include "scull.h"
 
 struct file_operations scull_fops = {		
 	.owner = THIS_MODULE,			
@@ -48,6 +6,7 @@ struct file_operations scull_fops = {
 	.write = scull_write,
 	.open = scull_open,
 	.release = scull_release,
+	.llseek = scull_llseek
 };
 
 int scull_trim(struct scull_dev *dev) {
@@ -76,77 +35,6 @@ int scull_trim(struct scull_dev *dev) {
 	return 0;
 }
 
-static void scull_setup_cdev(struct scull_dev *dev, int index) {
-	int err, devno = MKDEV(scull_major, scull_minor + index);	
-
-	cdev_init(&dev->cdev, &scull_fops);
-
-	dev->cdev.owner = THIS_MODULE;
-	dev->cdev.ops = &scull_fops;
-
-	err = cdev_add(&dev->cdev, devno, 1);
-
-	if (err)
-		printk(KERN_NOTICE "Error %d adding scull  %d", err, index);
-}
-
-void scull_cleanup_module(void) {
-	int i;
-	dev_t devno = MKDEV(scull_major, scull_minor);
-
-	if (scull_device) {
-		for (i = 0; i < scull_nr_devs; i++) {
-			scull_trim(scull_device + i);		
-			cdev_del(&scull_device[i].cdev);	
-		}
-		
-		kfree(scull_device);
-	}
-
-	unregister_chrdev_region(devno, scull_nr_devs); 
-	printk(KERN_ALERT "scull: exit\n");
-}
-
-static int scull_init_module(void) {
-	int rv, i;
-	dev_t dev;
-		
-	rv = alloc_chrdev_region(&dev, scull_minor, scull_nr_devs, "scull");	
-
-	if (rv) {
-		printk(KERN_WARNING "scull: can't get major %d\n", scull_major);
-		return rv;
-	}
-
-    scull_major = MAJOR(dev);
-
-	scull_device = kmalloc(scull_nr_devs * sizeof(struct scull_dev), GFP_KERNEL);	
-	
-	if (!scull_device) {
-		rv = -ENOMEM;
-		goto fail;
-	}
-
-	memset(scull_device, 0, scull_nr_devs * sizeof(struct scull_dev));		
-
-	for (i = 0; i < scull_nr_devs; i++) {						
-		scull_device[i].quantum = scull_quantum;
-		scull_device[i].qset = scull_qset;
-		sema_init(&scull_device[i].sem, 1);
-		scull_setup_cdev(&scull_device[i], i);					
-	}
-
-	dev = MKDEV(scull_major, scull_minor + scull_nr_devs);	
-	
-	printk(KERN_INFO "scull: major = %d minor = %d\n", scull_major, scull_minor);
-
-	return 0;
-
-fail:
-	scull_cleanup_module();
-	return rv;
-}
-
 int scull_open(struct inode *inode, struct file *flip) {
 	struct scull_dev *dev;
 
@@ -172,8 +60,7 @@ int scull_release(struct inode *inode, struct file *flip) {
 	return 0;
 }
 
-ssize_t scull_read(struct file *flip, char __user *buf, size_t count,
-			loff_t *f_pos) {
+ssize_t scull_read(struct file *flip, char __user *buf, size_t count, loff_t *f_pos) {
 	struct scull_dev *dev = flip->private_data;
 	struct scull_qset *dptr;
 	int quantum = dev->quantum, qset = dev->qset;
@@ -222,14 +109,14 @@ out:
 	return rv;
 }
 
-ssize_t scull_write(struct file *flip, const char __user *buf, size_t count,
-					loff_t *f_pos) {
+ssize_t scull_write(struct file *flip, const char __user *buf, size_t count, loff_t *f_pos) {
 	struct scull_dev *dev = flip->private_data;
 	struct scull_qset *dptr;
 	int quantum = dev->quantum, qset = dev->qset;
 	int itemsize = quantum * qset;
 	int item, s_pos, q_pos, rest;
 	ssize_t rv = -ENOMEM;
+
 
 	if (down_interruptible(&dev->sem))
 		return -ERESTARTSYS;
@@ -275,10 +162,37 @@ ssize_t scull_write(struct file *flip, const char __user *buf, size_t count,
 
 	if (dev->size < *f_pos)
 		dev->size = *f_pos;
-
+	
 out:
 	up(&dev->sem);
 	return rv;
+}
+
+loff_t scull_llseek(struct file *flip, loff_t off, int whence) {
+	struct scull_dev *dev = flip->private_data;
+	loff_t new_off;
+
+	switch(whence) {
+	case 0: /* SEEK_SET */
+		new_off = off;
+		break;
+
+	case 1: /* SEEK_CUR */
+		new_off = flip->f_pos + off;
+		break;
+
+	case 2: /* SEEK_END */
+		new_off = dev->size + off;
+		break;
+
+	default: 
+		return -EINVAL;
+	}
+	if (new_off < 0) return -EINVAL;
+
+	flip->f_pos = new_off;
+
+	return new_off;
 }
 
 struct scull_qset *scull_follow(struct scull_dev *dev, int n) {
@@ -309,6 +223,3 @@ struct scull_qset *scull_follow(struct scull_dev *dev, int n) {
 	
 	return qs;
 }
-
-module_init(scull_init_module);		
-module_exit(scull_cleanup_module);	
