@@ -41,6 +41,11 @@ int scull_open(struct inode *inode, struct file *flip) {
 	dev = container_of(inode->i_cdev, struct scull_dev, cdev);
 	flip->private_data = dev;
 
+	if (dev->user_count >= max_user_count) {
+		printk(KERN_ALERT "scull: device is busy (maximum number of users - 4)\n");
+		return -EINTR;
+	}
+
 	if ((flip->f_flags & O_ACCMODE) == O_WRONLY) {
 		if (down_interruptible(&dev->sem))
 			return -ERESTARTSYS;
@@ -50,12 +55,18 @@ int scull_open(struct inode *inode, struct file *flip) {
 	}
 	
 	printk(KERN_INFO "scull: device is opened\n");
+	
+	dev->user_count++;
 
 	return 0;
 }
 
 int scull_release(struct inode *inode, struct file *flip) {
+	struct scull_dev *dev = container_of(inode->i_cdev, struct scull_dev, cdev);
+
 	printk(KERN_INFO "scull: device is released\n");
+	
+	dev->user_count--;
 
 	return 0;
 }

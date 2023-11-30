@@ -11,7 +11,8 @@ int scull_major = 0;
 int scull_minor = 0;		
 int scull_nr_devs = 2;		
 int scull_quantum = 1000;	
-int scull_qset = 100;	
+int scull_qset = 100;
+unsigned short max_user_count = 4;
 struct scull_dev *scull_device;
 
 static void scull_setup_cdev(struct scull_dev *dev, int index) {
@@ -53,6 +54,7 @@ static int scull_init_module(void) {
 	for (i = 0; i < scull_nr_devs; i++) {						
 		scull_device[i].quantum = scull_quantum;
 		scull_device[i].qset = scull_qset;
+		scull_device[i].user_count = 0;
 		sema_init(&scull_device[i].sem, 1);
 		scull_setup_cdev(&scull_device[i], i);					
 	}

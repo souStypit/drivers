@@ -43,14 +43,23 @@ int main() {
     
     while (!exit) {
         if (!conn) {
-            printf("choose room (1,2): \n");
+            printf("choose room (1,2) or exit (3): \n");
             scanf("%d", &room_n);
+            if (room_n == 3) exit = 1;
             if (room_n > 2 || room_n < 1) continue;
             conn = 1;
         }
 
         fd = open(room_set[room_n - 1], O_RDWR);
-        if (!fd) return -1;
+        if (fd < 0) {
+            if (fd == -1) {
+                printf("Error %d: max number of users - 4!\n", fd);
+                conn = 0;
+                continue;
+            }
+
+            return -1;
+        }
 
         printf("1-choose_room, 2-read, 3-write, 4-exit\n");
         scanf("%d", &choice);
