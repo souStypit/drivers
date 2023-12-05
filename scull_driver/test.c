@@ -4,20 +4,27 @@
 
 #define DEVICE_1 "/dev/scull1"
 #define DEVICE_2 "/dev/scull2"
-#define BUFF_SIZE 1024
+#define BUFF_SIZE 64
 
 pid_t pid;
-char client_name[16];
 
-void scanf_sequence(char (*resultPtr)[BUFF_SIZE]) {
-    char ch, *res = *resultPtr;
+int scanf_sequence(char (*resultPtr)[BUFF_SIZE]) {
+    static int fail = 0;
+    static char ch; 
+    char *res = *resultPtr;
     int i = sprintf(res, "\nclient-%d: ", pid);
 
-    getchar();
-    while ((ch = getchar()) != '\n') {
+    if (!fail) getchar();
+    while ((ch = fail ? ch : getchar()) != '\n') {
+        if (i == BUFF_SIZE - 1) {
+            fail = 1;
+            break;
+        }
+        fail = 0;
         res[i++] = ch; 
     }
     res[i] = '\0';
+    return fail;
 }
 
 void read_room(int fd) {
@@ -30,9 +37,12 @@ void read_room(int fd) {
 
 void write_room(int fd) {
     char write_buf[BUFF_SIZE];
-    scanf_sequence(&write_buf);
+    int res;
     lseek(fd, 0, SEEK_END);
-    write(fd, write_buf, sizeof(write_buf));
+    do {
+        res = scanf_sequence(&write_buf);
+        write(fd, write_buf, sizeof(write_buf));
+    } while (res);
 }
 
 int main() {

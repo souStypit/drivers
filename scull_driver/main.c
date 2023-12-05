@@ -10,8 +10,8 @@ static int scull_init_module(void);
 int scull_major = 0;		
 int scull_minor = 0;		
 int scull_nr_devs = 2;		
-int scull_quantum = 1000;	
-int scull_qset = 100;
+int scull_quantum = 64;	
+int scull_qset = 2;
 unsigned short max_user_count = 4;
 struct scull_dev *scull_device;
 
