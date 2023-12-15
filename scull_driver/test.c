@@ -8,11 +8,11 @@
 
 pid_t pid;
 
-int scanf_sequence(char (*resultPtr)[BUFF_SIZE]) {
+int scanf_sequence(char (*resultPtr)[BUFF_SIZE], int *count) {
     static int fail = 0;
     static char ch; 
     char *res = *resultPtr;
-    int i = sprintf(res, "\nclient-%d: ", pid);
+    int i = sprintf(res, "\n%d: ", pid);
 
     if (!fail) getchar();
     while ((ch = fail ? ch : getchar()) != '\n') {
@@ -24,12 +24,13 @@ int scanf_sequence(char (*resultPtr)[BUFF_SIZE]) {
         res[i++] = ch; 
     }
     res[i] = '\0';
+    *count = i;
     return fail;
 }
 
 void read_room(int fd) {
     char read_buf[BUFF_SIZE];
-    while (read(fd, read_buf, sizeof(read_buf)) > 0) { 
+    while (read(fd, read_buf, 1) > 0) { 
         printf("%s", read_buf);
     }
     printf("\n");
@@ -37,11 +38,11 @@ void read_room(int fd) {
 
 void write_room(int fd) {
     char write_buf[BUFF_SIZE];
-    int res;
+    int res, count = 0;
     lseek(fd, 0, SEEK_END);
     do {
-        res = scanf_sequence(&write_buf);
-        write(fd, write_buf, sizeof(write_buf));
+        res = scanf_sequence(&write_buf, &count);
+        write(fd, write_buf, (size_t)count);
     } while (res);
 }
 

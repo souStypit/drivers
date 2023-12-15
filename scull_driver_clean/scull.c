@@ -55,27 +55,29 @@ int scull_trim(struct scull_dev *dev)
 	return 0;
 }
 
-int scull_open(struct inode *inode, struct file *flip)
+int scull_open(struct inode *inode, struct file *filp)
 {
 	struct scull_dev *dev;
 
 	dev = container_of(inode->i_cdev, struct scull_dev, cdev); 
-	flip->private_data = dev;
+	filp->private_data = dev;
 
-	if ((flip->f_flags & O_ACCMODE) == O_WRONLY) { 
+	if ((filp->f_flags & O_ACCMODE) == O_WRONLY) { 
 		if (down_interruptible(&dev->sem))
 			return -ERESTARTSYS;
 
 		scull_trim(dev);
 		up(&dev->sem);
 	}
+
+	if (filp->f_mode & FMODE_WRITE) filp->pos = dev->size;
 	
 	printk(KERN_INFO "scull: device is opend\n");
 
 	return 0;
 }
 
-int scull_release(struct inode *inode, struct file *flip)
+int scull_release(struct inode *inode, struct file *filp)
 {
 	return 0;
 }
@@ -110,17 +112,31 @@ struct scull_qset *scull_follow(struct scull_dev *dev, int n)
 	return qs;
 }
 
-ssize_t scull_read(struct file *flip, char __user *buf, size_t count, loff_t *f_pos)
+ssize_t scull_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
-	struct scull_dev *dev = flip->private_data;
+	struct scull_dev *dev = filp->private_data;
 	struct scull_qset *dptr;
 	int quantum = dev->quantum, qset = dev->qset;
 	int itemsize = quantum * qset;
 	int item, s_pos, q_pos, rest;
 	ssize_t rv = 0;
-	printk(KERN_INFO "%lld\n", *f_pos);
+	bool flag = 0;
+	
 	if (down_interruptible(&dev->sem))	
 		return -ERESTARTSYS;
+
+	while (dev->size == 0) {
+        printk(KERN_INFO "buffer is empty");
+        if (filp->f_flags & O_NONBLOCK) {
+            up(&dev->sem);
+            return -EAGAIN;
+        }
+
+        up(&dev->sem);
+        wait_event_interruptible(read_queue, dev->size > 0);
+        if (down_interruptible(&dev->sem))
+            return -ERESTARTSYS;
+	}
 
 	if (*f_pos >= dev->size) {		
 		printk(KERN_INFO "scull: *f_pos more than size %lu\n", dev->size);
@@ -159,9 +175,9 @@ out:
 	return rv;
 }
 
-ssize_t scull_write(struct file *flip, const char __user *buf, size_t count, loff_t *f_pos)
+ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
 {
-	struct scull_dev *dev = flip->private_data;
+	struct scull_dev *dev = filp->private_data;
 	struct scull_qset *dptr;
 	int quantum = dev->quantum, qset = dev->qset;
 	int itemsize = quantum * qset;

@@ -35,18 +35,18 @@ int scull_trim(struct scull_dev *dev) {
 	return 0;
 }
 
-int scull_open(struct inode *inode, struct file *flip) {
+int scull_open(struct inode *inode, struct file *filp) {
 	struct scull_dev *dev;
 
 	dev = container_of(inode->i_cdev, struct scull_dev, cdev);
-	flip->private_data = dev;
+	filp->private_data = dev;
 
 	if (dev->user_count >= max_user_count) {
 		printk(KERN_ALERT "scull: device is busy (maximum number of users - 4)\n");
 		return -EINTR;
 	}
 
-	if ((flip->f_flags & O_ACCMODE) == O_WRONLY) {
+	if ((filp->f_flags & O_ACCMODE) == O_WRONLY) {
 		if (down_interruptible(&dev->sem))
 			return -ERESTARTSYS;
 
@@ -61,7 +61,7 @@ int scull_open(struct inode *inode, struct file *flip) {
 	return 0;
 }
 
-int scull_release(struct inode *inode, struct file *flip) {
+int scull_release(struct inode *inode, struct file *filp) {
 	struct scull_dev *dev = container_of(inode->i_cdev, struct scull_dev, cdev);
 
 	printk(KERN_INFO "scull: device is released\n");
@@ -71,8 +71,8 @@ int scull_release(struct inode *inode, struct file *flip) {
 	return 0;
 }
 
-ssize_t scull_read(struct file *flip, char __user *buf, size_t count, loff_t *f_pos) {
-	struct scull_dev *dev = flip->private_data;
+ssize_t scull_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos) {
+	struct scull_dev *dev = filp->private_data;
 	struct scull_qset *dptr;
 	int quantum = dev->quantum, qset = dev->qset;
 	int itemsize = quantum * qset;
@@ -112,7 +112,6 @@ ssize_t scull_read(struct file *flip, char __user *buf, size_t count, loff_t *f_
 	}
 
 	*f_pos += count;
-	
 	rv = count;
 
 out:
@@ -120,14 +119,15 @@ out:
 	return rv;
 }
 
-ssize_t scull_write(struct file *flip, const char __user *buf, size_t count, loff_t *f_pos) {
-	struct scull_dev *dev = flip->private_data;
+ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos) {
+	struct scull_dev *dev = filp->private_data;
 	struct scull_qset *dptr;
 	int quantum = dev->quantum, qset = dev->qset;
 	int itemsize = quantum * qset;
 	int item, s_pos, q_pos, rest;
 	ssize_t rv = -ENOMEM;
 
+	*f_pos = dev->size;
 
 	if (down_interruptible(&dev->sem))
 		return -ERESTARTSYS;
@@ -159,7 +159,6 @@ ssize_t scull_write(struct file *flip, const char __user *buf, size_t count, lof
 			goto out;
 	}
 
-
 	if (count > quantum - q_pos)
 		count = quantum - q_pos;
 
@@ -167,9 +166,17 @@ ssize_t scull_write(struct file *flip, const char __user *buf, size_t count, lof
 		rv = -EFAULT;
 		goto out;
 	}
-
+	
 	*f_pos += count;
 	rv = count;
+
+	if (dev->size > 100) {
+		count = 0;
+		*f_pos = 0;
+		dev->size = 0;
+		filp->f_pos = 0;
+		scull_trim(dev);
+	}
 
 	if (dev->size < *f_pos)
 		dev->size = *f_pos;
@@ -179,8 +186,8 @@ out:
 	return rv;
 }
 
-loff_t scull_llseek(struct file *flip, loff_t off, int whence) {
-	struct scull_dev *dev = flip->private_data;
+loff_t scull_llseek(struct file *filp, loff_t off, int whence) {
+	struct scull_dev *dev = filp->private_data;
 	loff_t new_off;
 
 	switch(whence) {
@@ -189,7 +196,7 @@ loff_t scull_llseek(struct file *flip, loff_t off, int whence) {
 		break;
 
 	case 1: /* SEEK_CUR */
-		new_off = flip->f_pos + off;
+		new_off = filp->f_pos + off;
 		break;
 
 	case 2: /* SEEK_END */
@@ -201,7 +208,7 @@ loff_t scull_llseek(struct file *flip, loff_t off, int whence) {
 	}
 	if (new_off < 0) return -EINVAL;
 
-	flip->f_pos = new_off;
+	filp->f_pos = new_off;
 
 	return new_off;
 }
