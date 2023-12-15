@@ -82,6 +82,28 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count, loff_t *f_
 	if (down_interruptible(&dev->sem))
 		return -ERESTARTSYS;
 
+	if (dev->size > max_size) {
+		printk(KERN_INFO "buffer cleaning\n");
+		count = 0;
+		*f_pos = 0;
+		dev->size = 0;
+		filp->f_pos = 0;
+		scull_trim(dev);
+		goto out;
+	}
+
+	while (dev->size <= 0) {
+        printk("buffer is empty");
+        if (filp->f_flags & O_NONBLOCK) {
+            up(&dev->sem);
+            return -EAGAIN;
+        }
+		up(&dev->sem);
+        wait_event_interruptible(read_queue, dev->size > 0);
+        if (down_interruptible(&dev->sem))
+            return -ERESTARTSYS;
+	}
+
 	if (*f_pos >= dev->size) {	
 		printk(KERN_INFO "scull: *f_pos more than size %lu\n", dev->size);
 		goto out;
@@ -116,6 +138,7 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count, loff_t *f_
 
 out:
 	up(&dev->sem);
+	wake_up_interruptible(&write_queue);
 	return rv;
 }
 
@@ -131,6 +154,18 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, lof
 
 	if (down_interruptible(&dev->sem))
 		return -ERESTARTSYS;
+
+	while (dev->size >= max_size) {
+        printk(KERN_INFO "buffer is filled");
+        if (filp->f_flags & O_NONBLOCK) {
+            up(&dev->sem);
+			return -EAGAIN;
+		}
+		up(&dev->sem);
+        wait_event_interruptible(write_queue, dev->size < max_size);
+        if (down_interruptible(&dev->sem))
+            return -ERESTARTSYS;
+	}
 
 	item = (long)*f_pos / itemsize;
 	rest = (long)*f_pos % itemsize;
@@ -170,19 +205,12 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, lof
 	*f_pos += count;
 	rv = count;
 
-	if (dev->size > 100) {
-		count = 0;
-		*f_pos = 0;
-		dev->size = 0;
-		filp->f_pos = 0;
-		scull_trim(dev);
-	}
-
 	if (dev->size < *f_pos)
 		dev->size = *f_pos;
 	
 out:
 	up(&dev->sem);
+    wake_up_interruptible(&read_queue);
 	return rv;
 }
 

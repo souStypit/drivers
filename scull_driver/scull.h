@@ -13,10 +13,14 @@ extern int scull_minor;
 extern int scull_nr_devs;		
 extern int scull_quantum;	
 extern int scull_qset;
+extern int max_size;
 extern unsigned short max_user_count;
 
 extern struct scull_dev *scull_device;
 extern struct file_operations scull_fops;
+
+extern struct wait_queue_head read_queue;
+extern struct wait_queue_head write_queue;
 
 struct scull_qset {
 	void **data;			

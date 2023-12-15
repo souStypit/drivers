@@ -4,7 +4,7 @@
 
 #define DEVICE_1 "/dev/scull1"
 #define DEVICE_2 "/dev/scull2"
-#define BUFF_SIZE 64
+#define BUFF_SIZE 50
 
 pid_t pid;
 
@@ -39,7 +39,7 @@ void read_room(int fd) {
 void write_room(int fd) {
     char write_buf[BUFF_SIZE];
     int res, count = 0;
-    lseek(fd, 0, SEEK_END);
+    // lseek(fd, 0, SEEK_END);
     do {
         res = scanf_sequence(&write_buf, &count);
         write(fd, write_buf, (size_t)count);

@@ -12,8 +12,12 @@ int scull_minor = 0;
 int scull_nr_devs = 2;		
 int scull_quantum = 64;	
 int scull_qset = 2;
+int max_size = 100;
 unsigned short max_user_count = 4;
 struct scull_dev *scull_device;
+
+DECLARE_WAIT_QUEUE_HEAD(read_queue);
+DECLARE_WAIT_QUEUE_HEAD(write_queue);
 
 static void scull_setup_cdev(struct scull_dev *dev, int index) {
 	int err, devno = MKDEV(scull_major, scull_minor + index);	
