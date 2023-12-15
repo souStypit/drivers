@@ -197,6 +197,11 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, lof
 	if (count > quantum - q_pos)
 		count = quantum - q_pos;
 
+	// if (*f_pos + count >= max_size) { 
+	// 	printk(KERN_INFO "out of range\n");
+	// 	count = max_size - count;
+	// }
+
 	if (copy_from_user(dptr->data[s_pos] + q_pos, buf, count)) {
 		rv = -EFAULT;
 		goto out;

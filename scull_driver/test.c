@@ -4,7 +4,7 @@
 
 #define DEVICE_1 "/dev/scull1"
 #define DEVICE_2 "/dev/scull2"
-#define BUFF_SIZE 50
+#define BUFF_SIZE 64
 
 pid_t pid;
 
