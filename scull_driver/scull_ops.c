@@ -68,8 +68,8 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count, loff_t *f_
 	int item, s_pos, q_pos, rest;
 	ssize_t rv = 0;
 
-	dev->readp += count;
 	*f_pos = dev->readp;
+	dev->readp += count;
 
 	if (down_interruptible(&dev->sem))
 		return -ERESTARTSYS;

@@ -28,15 +28,14 @@ int scanf_sequence(char (*resultPtr)[BUFF_SIZE], int *count) {
 
 void read_room(int fd) {
     char read_buf[BUFF_SIZE];
-    int nbyte;
+    int nbyte, i = 0;
     
     printf("Enter n bytes: ");
     scanf("%d", &nbyte);
 
-    while (read(fd, read_buf, 1) > 0 && nbyte > 0) { 
-        printf("%s", read_buf);
-        nbyte--;
-    }
+    read(fd, read_buf, nbyte);
+    printf("%s", read_buf);
+
     printf("\n");
 }
 
