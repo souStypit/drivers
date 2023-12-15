@@ -6,13 +6,11 @@
 #define DEVICE_2 "/dev/scull2"
 #define BUFF_SIZE 64
 
-pid_t pid;
-
 int scanf_sequence(char (*resultPtr)[BUFF_SIZE], int *count) {
     static int fail = 0;
     static char ch; 
     char *res = *resultPtr;
-    int i = sprintf(res, "\n%d: ", pid);
+    int i = 0;
 
     if (!fail) getchar();
     while ((ch = fail ? ch : getchar()) != '\n') {
@@ -30,8 +28,14 @@ int scanf_sequence(char (*resultPtr)[BUFF_SIZE], int *count) {
 
 void read_room(int fd) {
     char read_buf[BUFF_SIZE];
-    while (read(fd, read_buf, 1) > 0) { 
+    int nbyte;
+    
+    printf("Enter n bytes: ");
+    scanf("%d", &nbyte);
+
+    while (read(fd, read_buf, 1) > 0 && nbyte > 0) { 
         printf("%s", read_buf);
+        nbyte--;
     }
     printf("\n");
 }
@@ -50,8 +54,6 @@ int main() {
     int fd, room_n, exit = 0, conn = 0, choice;
     const char *room_set[] = { DEVICE_1, DEVICE_2 };
 
-    pid = getpid();
-    
     while (!exit) {
         if (!conn) {
             printf("choose room (1,2) or exit (3): \n");
@@ -62,15 +64,7 @@ int main() {
         }
 
         fd = open(room_set[room_n - 1], O_RDWR);
-        if (fd < 0) {
-            if (fd == -1) {
-                printf("Error %d: max number of users - 4!\n", fd);
-                conn = 0;
-                continue;
-            }
-
-            return -1;
-        }
+        if (fd < 0) return -1;
 
         printf("1-choose_room, 2-read, 3-write, 4-exit\n");
         scanf("%d", &choice);
@@ -79,7 +73,6 @@ int main() {
             conn = 0;
             break;
         case 2:
-            printf("history:");
             read_room(fd);
             break;
         case 3:

@@ -13,7 +13,6 @@ int scull_nr_devs = 2;
 int scull_quantum = 64;	
 int scull_qset = 2;
 int max_size = 100;
-unsigned short max_user_count = 4;
 struct scull_dev *scull_device;
 
 DECLARE_WAIT_QUEUE_HEAD(read_queue);
@@ -58,7 +57,7 @@ static int scull_init_module(void) {
 	for (i = 0; i < scull_nr_devs; i++) {						
 		scull_device[i].quantum = scull_quantum;
 		scull_device[i].qset = scull_qset;
-		scull_device[i].user_count = 0;
+		scull_device[i].readp = 0;
 		sema_init(&scull_device[i].sem, 1);
 		scull_setup_cdev(&scull_device[i], i);					
 	}

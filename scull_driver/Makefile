@@ -1,4 +1,3 @@
-
 scull-objs = scull_ops.o main.o
 obj-m += scull.o
 

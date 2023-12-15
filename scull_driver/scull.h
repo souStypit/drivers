@@ -14,7 +14,6 @@ extern int scull_nr_devs;
 extern int scull_quantum;	
 extern int scull_qset;
 extern int max_size;
-extern unsigned short max_user_count;
 
 extern struct scull_dev *scull_device;
 extern struct file_operations scull_fops;
@@ -34,8 +33,8 @@ struct scull_dev {
 	unsigned long size;	  
 	unsigned int access_key;  
 	struct semaphore sem;    
-	struct cdev cdev;	
-	unsigned short user_count;
+	struct cdev cdev;
+	unsigned int readp;
 };
 
 int scull_trim(struct scull_dev *dev);
